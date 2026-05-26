@@ -1,14 +1,8 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║        GEOALPHA · KASPAROV BOT — Version Gemini              ║
-║  Yahoo Finance + Gemini IA → Telegram push instantané        ║
+║        GEOALPHA · KASPAROV BOT — Version 3.0                 ║
+║  Nouvelle librairie google-genai + Telegram push             ║
 ╚══════════════════════════════════════════════════════════════╝
-
-INSTALLATION :
-    pip install google-generativeai requests schedule yfinance
-
-DÉMARRAGE :
-    python geoalpha_gemini_bot.py
 """
 
 import requests
@@ -17,7 +11,7 @@ import time
 import json
 import yfinance as yf
 from datetime import datetime
-import google.generativeai as genai
+from google import genai
 
 
 # ══════════════════════════════════════════════════════════════
@@ -28,13 +22,13 @@ TELEGRAM_TOKEN   = "8954725433:AAF_WORnnP1Xeo2rRiACneHN0mGxsG_oIc0"
 TELEGRAM_CHAT_ID = "976026689"
 GEMINI_API_KEY   = "AIzaSyAx-BUJm14KFqVOg24j4PB6fY33lNE8WTA"
 
-# Configuration Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash-latest")
+# Nouvelle librairie google-genai
+client = genai.Client(api_key=GEMINI_API_KEY)
+GEMINI_MODEL = "gemini-2.0-flash"
 
 
 # ══════════════════════════════════════════════════════════════
-# ⚙️  PARAMÈTRES DU BOT
+# ⚙️  PARAMÈTRES
 # ══════════════════════════════════════════════════════════════
 
 WATCHLIST = {
@@ -52,8 +46,8 @@ WATCHLIST = {
     "LLY":     "Eli Lilly · Biotech",
 }
 
-ALERT_THRESHOLD_PCT = 2.5   # Alerte si mouvement > 2.5%
-PRICE_SCAN_INTERVAL = 15    # Scan toutes les 15 min
+ALERT_THRESHOLD_PCT = 2.5
+PRICE_SCAN_INTERVAL = 15
 _last_prices        = {}
 _last_update_id     = 0
 
@@ -67,7 +61,8 @@ def send(text, chat_id=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
         r = requests.post(url, json={
-            "chat_id": cid, "text": text,
+            "chat_id": cid,
+            "text": text,
             "parse_mode": "HTML",
             "disable_web_page_preview": True,
         }, timeout=10)
@@ -92,7 +87,7 @@ def get_updates():
 
 
 # ══════════════════════════════════════════════════════════════
-# 📊  MARCHÉ — Prix Yahoo Finance
+# 📊  MARCHÉ
 # ══════════════════════════════════════════════════════════════
 
 def get_price(ticker):
@@ -109,13 +104,13 @@ def get_price(ticker):
 
 
 def get_market_snapshot():
-    """Récupère tous les prix et retourne un résumé pour l'IA."""
     data, pulse_lines = [], []
     for ticker, name in WATCHLIST.items():
         price, change = get_price(ticker)
         if price and change is not None:
             data.append({
-                "ticker": ticker, "name": name,
+                "ticker": ticker,
+                "name": name,
                 "price": round(price, 2),
                 "change_pct": round(change, 2),
             })
@@ -129,7 +124,6 @@ def get_market_snapshot():
 
 
 def scan_alerts():
-    """Détecte les mouvements anormaux."""
     global _last_prices
     alerts = []
     hour = datetime.now().hour
@@ -150,13 +144,15 @@ def scan_alerts():
 
 
 # ══════════════════════════════════════════════════════════════
-# 🧠  GEMINI IA — Génération des signaux
+# 🧠  GEMINI IA — Nouvelle librairie google-genai
 # ══════════════════════════════════════════════════════════════
 
 def call_gemini(prompt):
-    """Appel Gemini avec parsing JSON robuste."""
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+        )
         text  = response.text
         clean = text.replace("```json", "").replace("```", "").strip()
         start = clean.find("{")
@@ -173,9 +169,7 @@ def call_gemini(prompt):
 
 
 def generate_signals(market_data, session_label):
-    """Génère 3 signaux basés sur les prix réels + contexte géopolitique."""
     now = datetime.now().strftime("%d/%m/%Y %H:%M")
-
     prompt = f"""Tu es GeoAlpha Kasparov, le meilleur système d'analyse financière et géopolitique au monde.
 Date et heure : {now}
 Session : {session_label}
@@ -183,90 +177,84 @@ Session : {session_label}
 Voici les données de marché en temps réel :
 {json.dumps(market_data, indent=2)}
 
-En te basant sur ces prix réels ET sur ton analyse géopolitique actuelle (actualité mondiale, banques centrales, tensions géopolitiques, flux institutionnels), génère exactement 3 signaux de trading chirurgicaux.
+Génère exactement 3 signaux de trading chirurgicaux basés sur ces prix et ton analyse géopolitique.
 
-Réponds UNIQUEMENT en JSON valide, sans markdown, sans texte avant ou après :
+Réponds UNIQUEMENT en JSON valide sans markdown :
 {{
-  "context": "Contexte marché + géopolitique en 1 phrase percutante",
-  "polymarket": "Probabilité géopolitique ou événement macro clé du moment",
+  "context": "Contexte marché en 1 phrase",
+  "polymarket": "Signal géopolitique clé du moment",
   "signals": [
     {{
       "ticker": "TICKER",
       "name": "Nom complet",
       "action": "LONG ou SHORT",
-      "montant_eur": "35€ ou 30% du capital",
-      "levier": "x1",
-      "entree": "Prix ou condition précise",
-      "stop_loss": "-X% ou prix stop",
-      "target": "+X%",
-      "horizon": "1-3j ou 1sem",
-      "raison": "Raison géopolitique ou technique précise en 1 phrase",
-      "conviction": 85
-    }},
-    {{
-      "ticker": "TICKER",
-      "name": "Nom complet",
-      "action": "LONG ou SHORT",
-      "montant_eur": "30€",
+      "montant_eur": "35€",
       "levier": "x1",
       "entree": "Prix ou condition",
       "stop_loss": "-X%",
       "target": "+X%",
       "horizon": "1-3j",
-      "raison": "Raison courte",
+      "raison": "Raison en 1 phrase",
+      "conviction": 85
+    }},
+    {{
+      "ticker": "TICKER",
+      "name": "Nom",
+      "action": "LONG",
+      "montant_eur": "30€",
+      "levier": "x1",
+      "entree": "Prix",
+      "stop_loss": "-X%",
+      "target": "+X%",
+      "horizon": "1-3j",
+      "raison": "Raison",
       "conviction": 78
     }},
     {{
       "ticker": "TICKER",
-      "name": "Nom complet",
-      "action": "LONG ou SHORT",
+      "name": "Nom",
+      "action": "LONG",
       "montant_eur": "25€",
       "levier": "x1",
-      "entree": "Prix ou condition",
+      "entree": "Prix",
       "stop_loss": "-X%",
       "target": "+X%",
       "horizon": "1sem",
-      "raison": "Raison courte",
+      "raison": "Raison",
       "conviction": 72
     }}
   ],
-  "alerte": "Risque principal à surveiller maintenant",
-  "cash_reserve": "Garder X€ en cash"
+  "alerte": "Risque principal",
+  "cash_reserve": "10€"
 }}"""
-
     return call_gemini(prompt)
 
 
 def analyze_movement(ticker, name, price, change):
-    """Analyse rapide d'un mouvement anormal."""
     direction = "hausse" if change > 0 else "baisse"
     prompt = f"""Tu es GeoAlpha Kasparov. {ticker} ({name}) vient de faire une {direction} de {abs(change):.1f}% à {price:.2f}$.
 
-Analyse ce mouvement et génère un signal d'investissement immédiat.
-
 Réponds UNIQUEMENT en JSON valide :
 {{
-  "catalyseur": "Raison probable de ce mouvement",
+  "catalyseur": "Raison probable",
   "action": "LONG ou SHORT ou HOLD",
   "conviction": 80,
-  "entree": "Prix optimal d'entrée",
+  "entree": "Prix optimal",
   "stop_loss": "-X%",
   "target": "+X%",
   "horizon": "intraday ou 1-3j",
-  "raison": "Thèse d'investissement en 1 phrase"
+  "raison": "Thèse en 1 phrase"
 }}"""
-
     return call_gemini(prompt)
 
 
 # ══════════════════════════════════════════════════════════════
-# 📨  FORMATAGE DES MESSAGES
+# 📨  FORMATAGE
 # ══════════════════════════════════════════════════════════════
 
 def fmt_signals(data, session):
     medals = ["🥇", "🥈", "🥉"]
     now    = datetime.now().strftime("%H:%M")
-
     msg = (
         f"🤖 <b>GEOALPHA · KASPAROV — {session}</b>\n"
         f"📅 {datetime.now().strftime('%d/%m/%Y')} à {now}\n"
@@ -276,29 +264,25 @@ def fmt_signals(data, session):
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"⚡ <b>VOS 3 ORDRES KASPAROV</b>\n"
     )
-
     for i, s in enumerate(data.get("signals", [])[:3]):
         action = s.get("action", "")
         icon   = "🟢" if action == "LONG" else "🔴"
         conv   = s.get("conviction", 0)
         bars   = "█" * (conv // 10) + "░" * (10 - conv // 10)
-
         msg += (
-            f"\n{medals[i]} {icon} <b>{action} {s.get('ticker','')} "
-            f"— {s.get('name','')}</b>\n"
+            f"\n{medals[i]} {icon} <b>{action} {s.get('ticker','')} — {s.get('name','')}</b>\n"
             f"💰 Montant   : <b>{s.get('montant_eur','')}</b>\n"
             f"⚡ Levier    : {s.get('levier','x1')}\n"
             f"🎯 Entrée    : {s.get('entree','—')}\n"
-            f"🛑 Stop-loss : {s.get('stop_loss','—')} ← PLACER EN MÊME TEMPS\n"
+            f"🛑 Stop-loss : {s.get('stop_loss','—')}\n"
             f"🚀 Target    : {s.get('target','—')}\n"
             f"⏱ Horizon   : {s.get('horizon','—')}\n"
             f"📝 {s.get('raison','')}\n"
             f"🧠 Conviction: {bars} {conv}%\n"
         )
-
     msg += (
         f"\n━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💵 <b>CASH À GARDER</b> : {data.get('cash_reserve','10€')}\n"
+        f"💵 <b>CASH</b> : {data.get('cash_reserve','10€')}\n"
         f"⚠️ <b>ALERTE</b> : {data.get('alerte','—')}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"<i>⚠️ Analyse uniquement — Pas de conseil financier</i>\n\n"
@@ -311,50 +295,38 @@ def fmt_alert(ticker, name, price, change, ai):
     icon   = "🚀" if change > 0 else "💥"
     action = ai.get("action", "HOLD") if ai else "HOLD"
     color  = "🟢" if action == "LONG" else "🔴" if action == "SHORT" else "⚪"
-
     msg = (
-        f"{icon} <b>ALERTE MOUVEMENT — {ticker}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{icon} <b>ALERTE — {ticker}</b>\n"
         f"📊 {name}\n"
-        f"💲 Prix     : <b>{price:.2f}</b>\n"
-        f"📈 Variation: <b>{'+' if change>0 else ''}{change:.2f}%</b>\n\n"
+        f"💲 {price:.2f}  |  {'+' if change>0 else ''}{change:.2f}%\n\n"
     )
-
     if ai:
         conv = ai.get("conviction", 0)
         bars = "█" * (conv // 10) + "░" * (10 - conv // 10)
         msg += (
-            f"🧠 <b>ANALYSE IA KASPAROV</b>\n"
-            f"📌 Catalyseur : {ai.get('catalyseur','—')}\n\n"
-            f"{color} <b>SIGNAL : {action}</b>\n"
-            f"🎯 Entrée    : {ai.get('entree','—')}\n"
-            f"🛑 Stop-loss : {ai.get('stop_loss','—')}\n"
-            f"🚀 Target    : {ai.get('target','—')}\n"
-            f"⏱ Horizon   : {ai.get('horizon','—')}\n"
-            f"📝 {ai.get('raison','')}\n"
-            f"🧠 Conviction: {bars} {conv}%\n"
+            f"📌 {ai.get('catalyseur','—')}\n\n"
+            f"{color} <b>{action}</b> | Entrée: {ai.get('entree','—')}\n"
+            f"🛑 Stop: {ai.get('stop_loss','—')} | 🚀 Target: {ai.get('target','—')}\n"
+            f"🧠 {bars} {conv}%\n"
         )
-
-    msg += f"\n<i>⚠️ Information uniquement — DYOR</i>"
+    msg += f"\n<i>⚠️ Information uniquement</i>"
     return msg
 
 
 # ══════════════════════════════════════════════════════════════
-# ⏰  SESSIONS PLANIFIÉES
+# ⏰  SESSIONS
 # ══════════════════════════════════════════════════════════════
 
 def session_scan(label):
-    print(f"\n[{datetime.now().strftime('%H:%M')}] 🔄 Session {label}...")
-    send(f"⏳ <b>GEOALPHA</b> — Session <b>{label}</b> en cours...\n📡 Collecte des prix + analyse IA Kasparov")
-
+    print(f"\n[{datetime.now().strftime('%H:%M')}] 🔄 {label}")
+    send(f"⏳ <b>GEOALPHA</b> — Scan <b>{label}</b> en cours...")
     market_data, _ = get_market_snapshot()
     data = generate_signals(market_data, label)
-
     if data:
         send(fmt_signals(data, label))
-        print(f"[{datetime.now().strftime('%H:%M')}] ✅ Signaux envoyés")
+        print(f"✅ Signaux envoyés")
     else:
-        send(f"⚠️ Erreur analyse {label} — vérifiez la clé Gemini")
+        send(f"⚠️ Erreur analyse — réessayez avec /signal")
 
 
 def morning_session():   session_scan("OUVERTURE EUROPE 09H00")
@@ -363,18 +335,16 @@ def evening_session():   session_scan("BILAN SOIR 22H00")
 
 
 # ══════════════════════════════════════════════════════════════
-# 🔔  SCAN TEMPS RÉEL
+# 🔔  ALERTES TEMPS RÉEL
 # ══════════════════════════════════════════════════════════════
 
 def realtime_scan():
-    print(f"[{datetime.now().strftime('%H:%M')}] 📡 Scan prix...")
+    print(f"[{datetime.now().strftime('%H:%M')}] 📡 Scan...")
     alerts = scan_alerts()
     for alert in alerts:
         print(f"  🚨 {alert['ticker']}: {alert['change']:+.2f}%")
-        ai  = analyze_movement(alert["ticker"], alert["name"],
-                               alert["price"], alert["change"])
-        msg = fmt_alert(alert["ticker"], alert["name"],
-                        alert["price"], alert["change"], ai)
+        ai  = analyze_movement(alert["ticker"], alert["name"], alert["price"], alert["change"])
+        msg = fmt_alert(alert["ticker"], alert["name"], alert["price"], alert["change"], ai)
         send(msg)
         time.sleep(2)
 
@@ -391,10 +361,8 @@ def handle_commands():
         msg     = update.get("message", {})
         text    = msg.get("text", "").strip().lower()
         chat_id = str(msg.get("chat", {}).get("id", TELEGRAM_CHAT_ID))
-
         if not text:
             continue
-
         print(f"[CMD] {text}")
 
         if text in ("/signal", "/signaux", "/trade"):
@@ -407,33 +375,24 @@ def handle_commands():
                 send("❌ Erreur IA — réessayez dans quelques instants", chat_id)
 
         elif text in ("/pulse", "/market", "/prix"):
-            send("📡 Collecte des prix en cours...", chat_id)
+            send("📡 Collecte des prix...", chat_id)
             _, pulse = get_market_snapshot()
             now = datetime.now().strftime("%H:%M")
             send(
                 f"📊 <b>MARKET PULSE — {now}</b>\n"
-                f"━━━━━━━━━━━━━━━━━\n"
-                f"{pulse}\n"
-                f"━━━━━━━━━━━━━━━━━\n"
-                f"<i>Scan toutes les {PRICE_SCAN_INTERVAL} min</i>",
+                f"━━━━━━━━━━━━━━━━━\n{pulse}\n━━━━━━━━━━━━━━━━━",
                 chat_id
             )
 
         elif text in ("/status", "/info"):
             now = datetime.now().strftime("%d/%m/%Y %H:%M")
             send(
-                f"🤖 <b>GEOALPHA KASPAROV — STATUS</b>\n"
+                f"🤖 <b>GEOALPHA — STATUS</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"✅ Bot actif\n"
-                f"🕐 Heure : {now}\n"
+                f"✅ Bot actif · {now}\n"
+                f"🧠 IA : Gemini 2.0 Flash\n"
                 f"📊 Tickers : {len(WATCHLIST)}\n"
-                f"🔔 Seuil alerte : ±{ALERT_THRESHOLD_PCT}%\n"
-                f"⏱ Scan : toutes les {PRICE_SCAN_INTERVAL} min\n"
-                f"🧠 IA : Gemini 1.5 Flash (gratuit)\n\n"
-                f"📅 Signaux automatiques :\n"
-                f"  🌅 09h00 — Europe\n"
-                f"  🌆 15h25 — NY\n"
-                f"  🌙 22h00 — Bilan\n\n"
+                f"🔔 Seuil : ±{ALERT_THRESHOLD_PCT}%\n\n"
                 f"💬 /signal  /pulse  /status",
                 chat_id
             )
@@ -442,14 +401,11 @@ def handle_commands():
             send(
                 f"🤖 <b>GEOALPHA KASPAROV BOT</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"IA de trading géopolitique · Gemini powered\n\n"
-                f"<b>COMMANDES :</b>\n"
                 f"• /signal → 3 signaux maintenant\n"
                 f"• /pulse  → Prix marché live\n"
                 f"• /status → État du bot\n\n"
-                f"<b>AUTOMATIQUE :</b>\n"
-                f"• Alertes si mouvement > ±{ALERT_THRESHOLD_PCT}%\n"
-                f"• Signaux planifiés 3x/jour",
+                f"Alertes auto si mouvement > ±{ALERT_THRESHOLD_PCT}%\n"
+                f"Signaux planifiés : 09h · 15h25 · 22h",
                 chat_id
             )
 
@@ -459,50 +415,29 @@ def handle_commands():
 # ══════════════════════════════════════════════════════════════
 
 def main():
-    print("""
-╔══════════════════════════════════════════════════════╗
-║    🤖 GEOALPHA KASPAROV BOT — Gemini Edition        ║
-╚══════════════════════════════════════════════════════╝
-    """)
-    print(f"✅ Gemini API configurée")
-    print(f"✅ Telegram configuré → Chat: {TELEGRAM_CHAT_ID}")
-    print(f"✅ Watchlist : {len(WATCHLIST)} tickers")
-    print(f"✅ Seuil alerte : ±{ALERT_THRESHOLD_PCT}%")
+    print("🤖 GEOALPHA KASPAROV BOT v3.0 — Démarrage...")
 
-    # Message de bienvenue Telegram
     send(
-        "🚀 <b>GEOALPHA KASPAROV BOT — ACTIF</b>\n\n"
-        "Votre IA de trading est opérationnelle.\n"
-        "Propulsé par <b>Gemini 1.5 Flash</b> (100% gratuit)\n\n"
-        "📅 <b>Signaux automatiques :</b>\n"
-        "• 🌅 09h00 — Ouverture Europe\n"
-        "• 🌆 15h25 — Pré-ouverture Wall Street\n"
-        "• 🌙 22h00 — Bilan soir\n\n"
-        f"🔔 Alertes instantanées si mouvement > ±{ALERT_THRESHOLD_PCT}%\n\n"
-        "💬 <b>Commandes :</b>\n"
-        "• /signal → Signaux maintenant\n"
-        "• /pulse  → Prix live\n"
-        "• /status → État du bot\n\n"
+        "🚀 <b>GEOALPHA KASPAROV BOT v3.0 — ACTIF</b>\n\n"
+        "IA de trading géopolitique opérationnelle.\n\n"
+        "📅 Signaux automatiques :\n"
+        "• 🌅 09h00 — Europe\n"
+        "• 🌆 15h25 — Wall Street\n"
+        "• 🌙 22h00 — Bilan\n\n"
+        f"🔔 Alertes si mouvement > ±{ALERT_THRESHOLD_PCT}%\n\n"
+        "💬 /signal  /pulse  /status\n\n"
         "<i>Bonne chasse aux alphas ! 📈</i>"
     )
 
-    print("\n✅ Message de bienvenue envoyé sur Telegram")
-
-    # Planification sessions
     schedule.every().day.at("09:00").do(morning_session)
     schedule.every().day.at("15:25").do(afternoon_session)
     schedule.every().day.at("22:00").do(evening_session)
-
-    # Scan prix temps réel
     schedule.every(PRICE_SCAN_INTERVAL).minutes.do(realtime_scan)
-
-    # Écoute commandes
     schedule.every(3).seconds.do(handle_commands)
 
-    # Init prix
     print("📡 Initialisation des prix...")
     scan_alerts()
-    print("✅ Prix initialisés\n")
+    print("✅ Prix initialisés")
     print(f"✅ Bot opérationnel — Ctrl+C pour arrêter\n")
 
     try:
