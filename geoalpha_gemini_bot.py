@@ -26,7 +26,7 @@ import google.generativeai as genai
 
 TELEGRAM_TOKEN   = "8954725433:AAF_WORnnP1Xeo2rRiACneHN0mGxsG_oIc0"
 TELEGRAM_CHAT_ID = "976026689"
-GEMINI_API_KEY   = "AIzaSyC8wVTIy2NZjk9sqfKgZLOKqfYcjqan4lw"
+GEMINI_API_KEY   = "AIzaSyAx-BUJm14KFqVOg24j4PB6fY33lNE8WTA"
 
 # Configuration Gemini
 genai.configure(api_key=GEMINI_API_KEY)
