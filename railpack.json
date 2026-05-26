@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "python",
+  "cmds": {
+    "install": "pip install -r requirements_gemini.txt"
+  },
+  "deploy": {
+    "startCommand": "python geoalpha_gemini_bot.py"
+  }
+}
