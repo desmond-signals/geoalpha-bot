@@ -1,7 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║        GEOALPHA · KASPAROV BOT — Version 3.0                 ║
-║  Nouvelle librairie google-genai + Telegram push             ║
+║        GEOALPHA · KASPAROV BOT — Version Groq                ║
+║  Yahoo Finance + Groq IA → Telegram push instantané          ║
 ╚══════════════════════════════════════════════════════════════╝
 """
 
@@ -11,7 +11,6 @@ import time
 import json
 import yfinance as yf
 from datetime import datetime
-from google import genai
 
 
 # ══════════════════════════════════════════════════════════════
@@ -20,11 +19,8 @@ from google import genai
 
 TELEGRAM_TOKEN   = "8954725433:AAF_WORnnP1Xeo2rRiACneHN0mGxsG_oIc0"
 TELEGRAM_CHAT_ID = "976026689"
-GEMINI_API_KEY   = "AIzaSyAvBUlAHcpJT0kdhiAt-uFBoGUBmpILrvk"
-
-# Nouvelle librairie google-genai
-client = genai.Client(api_key=GEMINI_API_KEY)
-GEMINI_MODEL = "gemini-2.0-flash"
+GROQ_API_KEY     = "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"
+GROQ_MODEL       = "llama-3.3-70b-versatile"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -87,7 +83,7 @@ def get_updates():
 
 
 # ══════════════════════════════════════════════════════════════
-# 📊  MARCHÉ
+# 📊  MARCHÉ — Yahoo Finance
 # ══════════════════════════════════════════════════════════════
 
 def get_price(ticker):
@@ -144,16 +140,37 @@ def scan_alerts():
 
 
 # ══════════════════════════════════════════════════════════════
-# 🧠  GEMINI IA — Nouvelle librairie google-genai
+# 🧠  GROQ IA
 # ══════════════════════════════════════════════════════════════
 
-def call_gemini(prompt):
+def call_groq(prompt):
+    """Appel Groq API avec parsing JSON robuste."""
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Tu es GeoAlpha Kasparov, expert mondial en trading géopolitique. Tu réponds UNIQUEMENT en JSON valide, sans markdown, sans texte avant ou après."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.7,
+                "max_tokens": 1500,
+            },
+            timeout=30,
         )
-        text  = response.text
+        data = r.json()
+        text  = data["choices"][0]["message"]["content"]
         clean = text.replace("```json", "").replace("```", "").strip()
         start = clean.find("{")
         end   = clean.rfind("}") + 1
@@ -164,24 +181,22 @@ def call_gemini(prompt):
         print(f"[JSON ERROR] {e}")
         return None
     except Exception as e:
-        print(f"[GEMINI ERROR] {e}")
+        print(f"[GROQ ERROR] {e}")
         return None
 
 
 def generate_signals(market_data, session_label):
     now = datetime.now().strftime("%d/%m/%Y %H:%M")
-    prompt = f"""Tu es GeoAlpha Kasparov, le meilleur système d'analyse financière et géopolitique au monde.
-Date et heure : {now}
-Session : {session_label}
+    prompt = f"""Date et heure : {now} — Session : {session_label}
 
-Voici les données de marché en temps réel :
+Données de marché en temps réel :
 {json.dumps(market_data, indent=2)}
 
-Génère exactement 3 signaux de trading chirurgicaux basés sur ces prix et ton analyse géopolitique.
+Génère exactement 3 signaux de trading basés sur ces prix et ton analyse géopolitique mondiale.
 
-Réponds UNIQUEMENT en JSON valide sans markdown :
+JSON exact à retourner :
 {{
-  "context": "Contexte marché en 1 phrase",
+  "context": "Contexte marché en 1 phrase percutante",
   "polymarket": "Signal géopolitique clé du moment",
   "signals": [
     {{
@@ -194,7 +209,7 @@ Réponds UNIQUEMENT en JSON valide sans markdown :
       "stop_loss": "-X%",
       "target": "+X%",
       "horizon": "1-3j",
-      "raison": "Raison en 1 phrase",
+      "raison": "Raison géopolitique ou technique en 1 phrase",
       "conviction": 85
     }},
     {{
@@ -224,19 +239,19 @@ Réponds UNIQUEMENT en JSON valide sans markdown :
       "conviction": 72
     }}
   ],
-  "alerte": "Risque principal",
+  "alerte": "Risque principal à surveiller",
   "cash_reserve": "10€"
 }}"""
-    return call_gemini(prompt)
+    return call_groq(prompt)
 
 
 def analyze_movement(ticker, name, price, change):
     direction = "hausse" if change > 0 else "baisse"
-    prompt = f"""Tu es GeoAlpha Kasparov. {ticker} ({name}) vient de faire une {direction} de {abs(change):.1f}% à {price:.2f}$.
+    prompt = f"""{ticker} ({name}) vient de faire une {direction} de {abs(change):.1f}% à {price:.2f}$.
 
-Réponds UNIQUEMENT en JSON valide :
+JSON à retourner :
 {{
-  "catalyseur": "Raison probable",
+  "catalyseur": "Raison probable du mouvement",
   "action": "LONG ou SHORT ou HOLD",
   "conviction": 80,
   "entree": "Prix optimal",
@@ -245,11 +260,11 @@ Réponds UNIQUEMENT en JSON valide :
   "horizon": "intraday ou 1-3j",
   "raison": "Thèse en 1 phrase"
 }}"""
-    return call_gemini(prompt)
+    return call_groq(prompt)
 
 
 # ══════════════════════════════════════════════════════════════
-# 📨  FORMATAGE
+# 📨  FORMATAGE DES MESSAGES
 # ══════════════════════════════════════════════════════════════
 
 def fmt_signals(data, session):
@@ -314,7 +329,7 @@ def fmt_alert(ticker, name, price, change, ai):
 
 
 # ══════════════════════════════════════════════════════════════
-# ⏰  SESSIONS
+# ⏰  SESSIONS PLANIFIÉES
 # ══════════════════════════════════════════════════════════════
 
 def session_scan(label):
@@ -343,8 +358,10 @@ def realtime_scan():
     alerts = scan_alerts()
     for alert in alerts:
         print(f"  🚨 {alert['ticker']}: {alert['change']:+.2f}%")
-        ai  = analyze_movement(alert["ticker"], alert["name"], alert["price"], alert["change"])
-        msg = fmt_alert(alert["ticker"], alert["name"], alert["price"], alert["change"], ai)
+        ai  = analyze_movement(alert["ticker"], alert["name"],
+                               alert["price"], alert["change"])
+        msg = fmt_alert(alert["ticker"], alert["name"],
+                        alert["price"], alert["change"], ai)
         send(msg)
         time.sleep(2)
 
@@ -366,7 +383,7 @@ def handle_commands():
         print(f"[CMD] {text}")
 
         if text in ("/signal", "/signaux", "/trade"):
-            send("⏳ Génération des signaux... (20-30 secondes)", chat_id)
+            send("⏳ Génération des signaux... (10-15 secondes)", chat_id)
             market_data, _ = get_market_snapshot()
             data = generate_signals(market_data, "ON DEMAND")
             if data:
@@ -390,7 +407,7 @@ def handle_commands():
                 f"🤖 <b>GEOALPHA — STATUS</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"✅ Bot actif · {now}\n"
-                f"🧠 IA : Gemini 2.0 Flash\n"
+                f"🧠 IA : Groq LLaMA 3.3 70B\n"
                 f"📊 Tickers : {len(WATCHLIST)}\n"
                 f"🔔 Seuil : ±{ALERT_THRESHOLD_PCT}%\n\n"
                 f"💬 /signal  /pulse  /status",
@@ -415,16 +432,17 @@ def handle_commands():
 # ══════════════════════════════════════════════════════════════
 
 def main():
-    print("🤖 GEOALPHA KASPAROV BOT v3.0 — Démarrage...")
+    print("🤖 GEOALPHA KASPAROV BOT — Groq Edition — Démarrage...")
 
     send(
-        "🚀 <b>GEOALPHA KASPAROV BOT v3.0 — ACTIF</b>\n\n"
-        "IA de trading géopolitique opérationnelle.\n\n"
-        "📅 Signaux automatiques :\n"
-        "• 🌅 09h00 — Europe\n"
+        "🚀 <b>GEOALPHA KASPAROV BOT — ACTIF</b>\n\n"
+        "IA de trading géopolitique opérationnelle.\n"
+        "Propulsé par <b>Groq LLaMA 3.3 70B</b> ⚡\n\n"
+        "📅 <b>Signaux automatiques :</b>\n"
+        "• 🌅 09h00 — Ouverture Europe\n"
         "• 🌆 15h25 — Wall Street\n"
-        "• 🌙 22h00 — Bilan\n\n"
-        f"🔔 Alertes si mouvement > ±{ALERT_THRESHOLD_PCT}%\n\n"
+        "• 🌙 22h00 — Bilan soir\n\n"
+        f"🔔 Alertes instantanées si mouvement > ±{ALERT_THRESHOLD_PCT}%\n\n"
         "💬 /signal  /pulse  /status\n\n"
         "<i>Bonne chasse aux alphas ! 📈</i>"
     )
@@ -438,7 +456,7 @@ def main():
     print("📡 Initialisation des prix...")
     scan_alerts()
     print("✅ Prix initialisés")
-    print(f"✅ Bot opérationnel — Ctrl+C pour arrêter\n")
+    print("✅ Bot opérationnel — Ctrl+C pour arrêter\n")
 
     try:
         while True:
