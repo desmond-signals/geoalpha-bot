@@ -20,7 +20,7 @@ from google import genai
 
 TELEGRAM_TOKEN   = "8954725433:AAF_WORnnP1Xeo2rRiACneHN0mGxsG_oIc0"
 TELEGRAM_CHAT_ID = "976026689"
-GEMINI_API_KEY   = "AIzaSyAx-BUJm14KFqVOg24j4PB6fY33lNE8WTA"
+GEMINI_API_KEY   = "AIzaSyAvBUlAHcpJT0kdhiAt-uFBoGUBmpILrvk"
 
 # Nouvelle librairie google-genai
 client = genai.Client(api_key=GEMINI_API_KEY)
