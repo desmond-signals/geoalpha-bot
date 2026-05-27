@@ -6,6 +6,7 @@
 """
 
 import requests
+import os
 import schedule
 import time
 import json
@@ -19,7 +20,7 @@ from datetime import datetime
 
 TELEGRAM_TOKEN   = "8954725433:AAF_WORnnP1Xeo2rRiACneHN0mGxsG_oIc0"
 TELEGRAM_CHAT_ID = "976026689"
-GROQ_API_KEY     = "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"
+GROQ_API_KEY     = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL       = "llama-3.3-70b-versatile"
 
 
