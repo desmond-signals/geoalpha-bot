@@ -140,6 +140,10 @@ def get_market_data():
 
 def call_groq(system, prompt):
     try:
+        if not GROQ_API_KEY:
+            print("[GROQ ERROR] Clé API vide !")
+            return None
+
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
@@ -157,7 +161,13 @@ def call_groq(system, prompt):
             },
             timeout=30,
         )
-        data  = r.json()
+        data = r.json()
+
+        # Log erreur Groq si pas de choices
+        if "choices" not in data:
+            print(f"[GROQ RESPONSE ERROR] {json.dumps(data)[:300]}")
+            return None
+
         text  = data["choices"][0]["message"]["content"]
         clean = text.replace("```json", "").replace("```", "").strip()
         s, e  = clean.find("{"), clean.rfind("}") + 1
@@ -380,6 +390,14 @@ def handle_commands():
 
 def main():
     print("🤖 GEOALPHA KASPAROV v5.0 — AUTO Edition")
+
+    # Vérification clé Groq
+    if not GROQ_API_KEY:
+        print("❌ GROQ_API_KEY est VIDE !")
+        print("   Variable Railway manquante ou mal nommée")
+        print(f"   Valeur actuelle: '{GROQ_API_KEY}'")
+    else:
+        print(f"✅ Clé Groq détectée : {GROQ_API_KEY[:8]}...")
 
     send(
         "🚀 <b>GEOALPHA KASPAROV v5.0 — ACTIF</b>\n\n"
